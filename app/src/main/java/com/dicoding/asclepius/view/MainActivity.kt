@@ -6,18 +6,17 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
-import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.provider.MediaStore
-import android.util.Log
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import com.dicoding.asclepius.R
 import com.dicoding.asclepius.databinding.ActivityMainBinding
 import com.dicoding.asclepius.helper.ImageClassifierHelper
 import org.tensorflow.lite.task.vision.classifier.Classifications
+import java.text.NumberFormat
 
 class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
@@ -57,7 +56,6 @@ class MainActivity : AppCompatActivity() {
 
         }
 
-
     private fun startGallery() {
         val pickIntent = Intent(Intent.ACTION_PICK)
         pickIntent.setDataAndType(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, "image/*")
@@ -75,11 +73,27 @@ class MainActivity : AppCompatActivity() {
             context = this,
             classifierListener = object : ImageClassifierHelper.ClassifierListener {
                 override fun onError(error: String) {
-                    println("Classification"+ error)
+                    runOnUiThread {
+                        showToast(error)
+                    }
                 }
+
                 override fun onResults(results: List<Classifications>?, inferenceTime: Long) {
-                    println("Classification"+ results.toString())
-                    println("Classification"+ inferenceTime.toString())
+                    runOnUiThread {
+                        results?.let { it ->
+                            if (it.isNotEmpty() && it[0].categories.isNotEmpty()) {
+                                println(it)
+                                val sortedCategories =
+                                    it[0].categories.sortedByDescending { it?.score }
+                                val result =
+                                    sortedCategories.joinToString("\n") {
+                                        "${it.label} " + NumberFormat.getPercentInstance()
+                                            .format(it.score).trim()
+                                    }
+                                moveToResult(result)
+                            }
+                        }
+                    }
                 }
             }
         )
@@ -87,8 +101,10 @@ class MainActivity : AppCompatActivity() {
         imageClassifierHelper.classifyStaticImage(currentImageUri!!)
     }
 
-    private fun moveToResult() {
+    private fun moveToResult(result: String) {
         val intent = Intent(this, ResultActivity::class.java)
+        intent.putExtra("result", result)
+        intent.putExtra("image", currentImageUri.toString())
         startActivity(intent)
     }
 
@@ -114,6 +130,5 @@ class MainActivity : AppCompatActivity() {
             }
         }.toTypedArray()
 
-        const val RESULT = "RESULT"
     }
 }
